@@ -1,16 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;  
+using UnityEngine;
 
 public class PlayerMove : MonoBehaviour
 {
-    public float[] speedLevels = { 3f, 5f, 7f, 9f, 12f }; // Velocidades por nivel
-    public int currentSpeedLevel = 0; // Nivel de velocidad actual (0 a 4)
-    public float holdTime = 0f; // Tiempo de presión de W para cambio de marcha
-    public float releaseTime = 0f; // Tiempo sin presionar W para bajar de marcha
-    public bool isMoving = false; // Indica si el tractor está en movimiento
-    private bool canShiftGear = false; // Controla si se puede presionar Q para subir de marcha
-    public bool isReversing = false; // Indica si está en reversa
+    public float[] speedLevels = { 3f, 5f, 7f, 9f, 12f, 15f };
+    public int currentSpeedLevel = 0;
+    public float holdTime = 0f;
+    public float releaseTime = 0f;
+    public bool isMoving = false;
+    private bool canShiftGear = false;
+    public bool isReversing = false;
 
     public float rotationSpeed = 150f;
     public Transform pivotLlantaTrasera1;
@@ -20,10 +20,18 @@ public class PlayerMove : MonoBehaviour
 
     private Rigidbody rb;
     public float gravityForce = 60f;
-    private float reverseSpeed = 5f; // Velocidad fija en reversa
+    private float reverseSpeed = 5f;
+    private bool uartAvanceActivo = false;
+    private bool uartReversaActiva = false;
+    private bool uartIzquierdaActiva = false;
+    private bool uartDerechaActiva = false;
+    private int ultimoComandoValido = 0x00;
+    private bool frenoActivo = false;
+    public bool CanShiftGear => canShiftGear;
 
     void Start()
     {
+        speedLevels = new float[] { 3f, 5f, 7f, 9f, 12f, 15f }; 
         rb = GetComponent<Rigidbody>();
         if (rb == null)
         {
@@ -39,35 +47,32 @@ public class PlayerMove : MonoBehaviour
 
     void Update()
     {
-        float moveZ = Input.GetAxis("Vertical"); // Adelante y atrás (-1 cuando presionas S)
+        float moveZ = Input.GetAxis("Vertical");
         float rotateY = Input.GetAxis("Horizontal");
 
-        // Freno con Shift (reinicia la velocidad a 3)
         if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
         {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             isMoving = false;
             isReversing = false;
-            currentSpeedLevel = 0; // Reiniciar a velocidad más baja (3)
+            currentSpeedLevel = 0;
             holdTime = 0f;
             releaseTime = 0f;
             canShiftGear = false;
             return;
         }
 
-        // Detenerse si presiono W y S al mismo tiempo
         if (Input.GetKey(KeyCode.W) && Input.GetKey(KeyCode.S))
         {
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
             isMoving = false;
             isReversing = false;
-            RotateWheels(0); // Mantener ruedas girando sin moverse
+            RotateWheels(0);
             return;
         }
 
-        // Mantener W para acumular tiempo de subida de marcha
         if (Input.GetKey(KeyCode.W))
         {
             isMoving = true;
@@ -76,13 +81,11 @@ public class PlayerMove : MonoBehaviour
             releaseTime = 0f;
 
             if (holdTime >= 2f)
-            {
                 canShiftGear = true;
-            }
         }
         else
         {
-            if (isMoving)
+            if (isMoving && !uartAvanceActivo)
             {
                 releaseTime += Time.deltaTime;
                 if (releaseTime >= 2f && currentSpeedLevel > 0)
@@ -91,15 +94,12 @@ public class PlayerMove : MonoBehaviour
                     releaseTime = 0f;
                 }
                 if (currentSpeedLevel == 0)
-                {
                     isMoving = false;
-                }
             }
             holdTime = 0f;
             canShiftGear = false;
         }
 
-        // Cambio manual de marcha con Q (solo si han pasado 2s con W)
         if (Input.GetKeyDown(KeyCode.Q) && currentSpeedLevel < speedLevels.Length - 1 && canShiftGear)
         {
             currentSpeedLevel++;
@@ -107,7 +107,6 @@ public class PlayerMove : MonoBehaviour
             holdTime = 0f;
         }
 
-        // Si presiono S mientras avanzo, el carro se detiene en lugar de retroceder
         if (Input.GetKey(KeyCode.S) && isMoving)
         {
             rb.linearVelocity = Vector3.zero;
@@ -117,42 +116,54 @@ public class PlayerMove : MonoBehaviour
             return;
         }
 
-        // Retroceder con S (y reiniciar la velocidad a 1)
         if (Input.GetKey(KeyCode.S) && !isMoving)
         {
             isReversing = true;
-            currentSpeedLevel = 0; // 🚨 Aquí se reinicia la velocidad a 1 (mínima marcha)
+            currentSpeedLevel = 0;
             Vector3 move = -transform.forward * reverseSpeed;
             rb.MovePosition(rb.position + move * Time.deltaTime);
             RotateWheels(reverseSpeed);
             return;
         }
 
-        // 🚨 SOLUCIÓN: DETENER MOVIMIENTO AL SOLTAR 'S'
         if (isReversing && !Input.GetKey(KeyCode.S))
         {
-         isReversing = false;
-         rb.linearVelocity = Vector3.zero; // Detener el Rigidbody
-          rb.angularVelocity = Vector3.zero;
-           RotateWheels(0);
+            isReversing = false;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            RotateWheels(0);
         }
 
-        // Aplicar movimiento hacia adelante si está en marcha
-        if (isMoving)
+        if ((uartAvanceActivo && !uartReversaActiva) || (isMoving && !isReversing))
         {
             Vector3 move = transform.forward * speedLevels[currentSpeedLevel];
             rb.MovePosition(rb.position + move * Time.deltaTime);
             RotateWheels(speedLevels[currentSpeedLevel]);
         }
+        else if (uartReversaActiva && !uartAvanceActivo && !isMoving)
+        {
+            isReversing = true;
+            Vector3 move = -transform.forward * reverseSpeed;
+            rb.MovePosition(rb.position + move * Time.deltaTime);
+            RotateWheels(reverseSpeed);
+        }
         else
         {
-            RotateWheels(0); // Si no se mueve, las ruedas no giran
+            RotateWheels(0);
         }
 
-        // Rotación del tractor
-        rb.MoveRotation(rb.rotation * Quaternion.Euler(0, rotateY * rotationSpeed * Time.deltaTime, 0));
+        if (uartIzquierdaActiva)
+        {
+            transform.Rotate(0, -rotationSpeed * Time.deltaTime, 0);
+            SteerWheels(-1f);
+        }
+        else if (uartDerechaActiva)
+        {
+            transform.Rotate(0, rotationSpeed * Time.deltaTime, 0);
+            SteerWheels(1f);
+        }
 
-        // Rotar ruedas delanteras
+        rb.MoveRotation(rb.rotation * Quaternion.Euler(0, rotateY * rotationSpeed * Time.deltaTime, 0));
         SteerWheels(rotateY);
     }
 
@@ -166,7 +177,7 @@ public class PlayerMove : MonoBehaviour
 
     void RotateWheels(float speed)
     {
-        if (speed == 0) return; // Si no hay movimiento, no rotar ruedas
+        if (speed == 0) return;
 
         float rotationAmount = speed * 300 * Time.deltaTime;
         Vector3 rearWheelAxis = Vector3.forward;
@@ -193,4 +204,135 @@ public class PlayerMove : MonoBehaviour
             wheel.localRotation = Quaternion.Lerp(wheel.localRotation, targetRotation, Time.deltaTime * 5f);
         }
     }
+
+    // UART control
+    public void AvanzarDesdeUART()
+    {
+        uartAvanceActivo = true;
+        uartReversaActiva = false;
+        isReversing = false;
+        isMoving = true;
+
+        // Solo cambia si estaba en 0
+        if (currentSpeedLevel == 0)
+        {
+            currentSpeedLevel = 1;
+        }
+
+        Debug.Log($"🚜 Avanzando UART. Velocidad: {currentSpeedLevel}");
+    }
+
+    public void DetenerDesdeUART()
+    {
+        uartAvanceActivo = false;
+        uartReversaActiva = false;
+        isMoving = false;
+        isReversing = false;
+
+        currentSpeedLevel = 0; // ← Reinicia velocidad al frenar
+
+        Debug.Log("🛑 Avance y reversa UART detenidos");
+    }
+
+    public void RetrocederDesdeUART()
+    {
+        uartReversaActiva = true;
+        uartAvanceActivo = false;
+        isMoving = false;
+        
+        currentSpeedLevel = 1; // <- Siempre que reverses, mostrar velocidad 1
+        
+        Debug.Log("🔄 Reversa UART activada");
+    }
+
+    public void DetenerReversaDesdeUART()
+    {
+        uartReversaActiva = false;
+        isReversing = false;
+        Debug.Log("⛔ Reversa UART detenida");
+    }
+
+    public void GirarIzquierdaUART()
+    {
+        uartIzquierdaActiva = true;
+        uartDerechaActiva = false;
+    }
+
+    public void GirarDerechaUART()
+    {
+        uartDerechaActiva = true;
+        uartIzquierdaActiva = false;
+    }
+
+    public void DetenerGiroUART()
+    {
+        uartIzquierdaActiva = false;
+        uartDerechaActiva = false;
+    }
+
+   public void AumentarVelocidadDesdeUART()
+    {
+        if (uartAvanceActivo && currentSpeedLevel < speedLevels.Length - 1)
+        {
+            currentSpeedLevel++;
+            Debug.Log("✅ Velocidad aumentada desde UART: " + currentSpeedLevel);
+        }
+        else
+{
+    if (!uartAvanceActivo)
+        Debug.Log("⛔ No se puede subir: uartAvanceActivo está en FALSE");
+    else if (currentSpeedLevel >= speedLevels.Length - 1)
+        Debug.Log("⛔ No se puede subir: ya estás en la velocidad máxima (" + currentSpeedLevel + ")");
 }
+    }
+
+    public void ActivarCambioDeMarchaUART()
+    {
+        canShiftGear = true;
+        Debug.Log("🕒 Cambio de marcha habilitado por UART");
+    }
+
+
+
+    public int MarchaVisual
+{
+    get
+    {
+        Debug.Log($"Marcha visual: {currentSpeedLevel} (modo visual)");
+
+        if (!uartAvanceActivo && !uartReversaActiva && !isMoving && !isReversing)
+            return 0;
+
+        if (uartReversaActiva)
+            return 1;
+
+        if (uartAvanceActivo)
+            return Mathf.Max(1, currentSpeedLevel);
+
+        return 0;
+    }
+}
+
+
+
+    public void DetenerTodoDesdeUART()
+    {
+        uartAvanceActivo = false;
+        uartReversaActiva = false;
+        isMoving = false;
+        isReversing = false;
+
+        Debug.Log("🛑 Todo detenido por comando 0x00");
+    }
+
+    public void DesactivarCambioDeMarchaUART()
+    {
+        canShiftGear = false;
+    }
+
+
+}
+
+
+
+

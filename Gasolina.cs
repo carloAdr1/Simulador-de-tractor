@@ -13,6 +13,14 @@ public class Gasolina : MonoBehaviour
     void Start()
     {
         playerMove = GetComponent<PlayerMove>();
+
+        if (GameManager.Instance != null)
+        {
+            gasolina = GameManager.Instance.gasolinaActual;
+        }
+
+        gasolina = Mathf.Clamp(gasolina, 0, 100);
+        GameManager.Instance.gasolinaActual = (int)gasolina;
     }
 
     void Update()
@@ -30,6 +38,22 @@ public class Gasolina : MonoBehaviour
         gasolina = Mathf.Clamp(gasolina, 0, gasolinaMax);
         ActualizarInterfaz();
 
+        // Actualizar GameManager en cada frame
+        GameManager.Instance.gasolinaActual = (int)gasolina;
+
+        // Enviar señal de gasolina baja al hardware (VHDL)
+        if (SerialSender.instance != null)
+        {
+            if (gasolina <= 50)
+            {
+                SerialSender.instance.EnviarValor(0xAA); // Encender LED
+            }
+            else
+            {
+                SerialSender.instance.EnviarValor(0xAB); // Apagar LED
+            }
+        }
+
         if (gasolina <= 0)
         {
             PerderJuego();
@@ -46,6 +70,6 @@ public class Gasolina : MonoBehaviour
 
     void PerderJuego()
     {
-        SceneManager.LoadScene("Perdiste"); // Cambia "Perdiste" por el nombre real de la escena
-    }
+        SceneManager.LoadScene("Perdiste"); // Cambia "Perdiste" por el nombre real
+        }
 }

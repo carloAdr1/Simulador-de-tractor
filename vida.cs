@@ -9,12 +9,29 @@ public class vida : MonoBehaviour
     public Image BarraSalud;
     public CanvasGroup visionDano;
 
+    public AudioSource sfxAlgo;
+    public AudioClip sfxDamage;
+
+    void Start()
+    {
+        if (GameManager.Instance != null)
+        {
+            salud = GameManager.Instance.vidaActual;
+        }
+
+        salud = Mathf.Clamp(salud, 0, 100);
+        GameManager.Instance.vidaActual = (int)salud;
+    }
+
     void Update()
     {
         if (visionDano.alpha > 0)
         {
             visionDano.alpha -= Time.deltaTime;
         }
+
+        GameManager.Instance.vidaActual = (int)salud;
+
         ActualizarInterfaz();
 
         if (salud <= 0)
@@ -27,6 +44,8 @@ public class vida : MonoBehaviour
     {
         salud -= daño;
         visionDano.alpha = 0.3f;
+
+        sfxAlgo.PlayOneShot(sfxDamage); // ✅ Sonido al recibir daño
     }
 
     void ActualizarInterfaz()
@@ -36,6 +55,6 @@ public class vida : MonoBehaviour
 
     void PerderJuego()
     {
-        SceneManager.LoadScene("Perdiste"); // Cambia "Perdiste" por el nombre real de la escena
+        SceneManager.LoadScene("Perdiste");
     }
 }
