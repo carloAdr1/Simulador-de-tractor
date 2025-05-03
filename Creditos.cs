@@ -1,10 +1,22 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class Creditos : MonoBehaviour
 {
+    public AudioSource sfxAlgo;
+    public AudioClip sfxboton;
+
     public void Credits()
     {
-        SceneManager.LoadScene(3); // Carga la escena del juego (0)
+        StartCoroutine(PlaySoundAndLoad(5));
+    }
+
+    private IEnumerator PlaySoundAndLoad(int sceneIndex)
+    {
+        sfxAlgo.PlayOneShot(sfxboton);
+        yield return new WaitForSeconds(sfxboton.length);
+        SceneManager.LoadScene(sceneIndex);
     }
 }
+

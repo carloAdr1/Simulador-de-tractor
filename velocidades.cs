@@ -16,16 +16,7 @@ public class Velocidades : MonoBehaviour
     {
         if (playerMove != null && velocidadTexto != null)
         {
-            if (playerMove.isMoving || playerMove.isReversing) 
-            {
-                // Mostrar la velocidad actual (+1 porque el índice inicia en 0)
-                velocidadTexto.text = (playerMove.currentSpeedLevel + 1).ToString();
-            }
-            else
-            {
-                // Si el tractor no se mueve, mostrar 0
-                velocidadTexto.text = "0";
-            }
+            velocidadTexto.text = playerMove.MarchaVisual.ToString();
         }
     }
 }
